@@ -21,6 +21,7 @@ mod notes;
 mod theme;
 mod transcribe;
 mod ui;
+mod webcam;
 
 use gtk::glib;
 
