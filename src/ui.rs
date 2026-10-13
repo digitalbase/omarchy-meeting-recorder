@@ -788,7 +788,19 @@ impl Recorder {
         find_bar.append(&find_next);
         find_bar.append(&find_close);
         right.append(&find_bar);
-        right.append(&transcript_scroll);
+        // The webcam, when the meeting has one, floats in the corner of the transcript.
+        let transcript_layers = gtk::Overlay::builder()
+            .child(&transcript_scroll)
+            .vexpand(true)
+            .build();
+        right.append(&transcript_layers);
+        let pip = player.video_widget();
+        pip.set_halign(gtk::Align::End);
+        pip.set_valign(gtk::Align::End);
+        pip.set_margin_end(16);
+        pip.set_margin_bottom(16);
+        pip.add_css_class("webcam-pip");
+        transcript_layers.add_overlay(pip);
 
         let done = gtk::Box::builder()
             .spacing(24)
@@ -4271,6 +4283,8 @@ fn load_css() {
                                 font-size: 13px; color: alpha(currentColor, 0.6); }
          .notes-toggle:hover { color: currentColor; }
          .webcam-preview { border-radius: 6px; background: black; margin: 6px 4px 6px 0; }
+         .player-video { border-radius: 10px; background: black; }
+         .webcam-pip { border-radius: 10px; box-shadow: 0 10px 30px alpha(black, 0.45); }
          .notes-text { font-family: \"IBM Plex Mono\", \"JetBrainsMono Nerd Font\", \"JetBrains Mono\", monospace;
                               font-size: 21px; line-height: 1.6; background: transparent; caret-color: currentColor; }
          .notes-text text { background: transparent; }
