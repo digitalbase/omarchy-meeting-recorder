@@ -1,4 +1,4 @@
-//! Notes: a panel next to the recorder with text to read from while
+//! Meeting notes: a panel next to the recorder with text to read from while
 //! recording and to edit on the spot, like the script of a voice-over.
 //!
 //! `omarchy-meeting-recorder notes <file>` opens it in the recorder
@@ -142,7 +142,7 @@ impl Notes {
         };
         let previous_button = button("go-up-symbolic", "Previous paragraph (Ctrl+↑)");
         let next_button = button("go-down-symbolic", "Next paragraph (Ctrl+↓)");
-        let close_button = button("window-close-symbolic", "Close the notes");
+        let close_button = button("window-close-symbolic", "Close the meeting notes");
         let footer = gtk::Box::new(gtk::Orientation::Horizontal, 2);
         footer.set_margin_top(4);
         footer.set_margin_bottom(6);
@@ -161,7 +161,7 @@ impl Notes {
         widget.append(&scroller);
         widget.append(&footer);
 
-        let prompter = Rc::new(Notes {
+        let notes = Rc::new(Notes {
             widget,
             close_button,
             view,
@@ -180,55 +180,55 @@ impl Notes {
         });
 
         let buttons = gtk::EventControllerLegacy::new();
-        let weak = Rc::downgrade(&prompter);
+        let weak = Rc::downgrade(&notes);
         buttons.connect_event(move |_, event| {
-            let Some(prompter) = weak.upgrade() else {
+            let Some(notes) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
             match event.event_type() {
-                gdk::EventType::ButtonPress => prompter.pressing.set(true),
+                gdk::EventType::ButtonPress => notes.pressing.set(true),
                 gdk::EventType::ButtonRelease => {
-                    prompter.pressing.set(false);
-                    if prompter.scroll_waiting.replace(false) {
-                        prompter.recenter_animated();
+                    notes.pressing.set(false);
+                    if notes.scroll_waiting.replace(false) {
+                        notes.recenter_animated();
                     }
                 }
                 _ => {}
             }
             glib::Propagation::Proceed
         });
-        prompter.view.add_controller(buttons);
+        notes.view.add_controller(buttons);
 
-        let buffer = prompter.view.buffer();
-        let weak = Rc::downgrade(&prompter);
+        let buffer = notes.view.buffer();
+        let weak = Rc::downgrade(&notes);
         buffer.connect_cursor_position_notify(move |_| {
-            if let Some(prompter) = weak.upgrade() {
-                prompter.highlight();
+            if let Some(notes) = weak.upgrade() {
+                notes.highlight();
             }
         });
-        let weak = Rc::downgrade(&prompter);
+        let weak = Rc::downgrade(&notes);
         buffer.connect_changed(move |_| {
-            if let Some(prompter) = weak.upgrade() {
-                prompter.highlight();
-                prompter.save_soon();
+            if let Some(notes) = weak.upgrade() {
+                notes.highlight();
+                notes.save_soon();
             }
         });
 
-        let weak = Rc::downgrade(&prompter);
-        prompter.scroller.vadjustment().connect_changed(move |_| {
+        let weak = Rc::downgrade(&notes);
+        notes.scroller.vadjustment().connect_changed(move |_| {
             let weak = weak.clone();
             glib::idle_add_local_once(move || {
-                if let Some(prompter) = weak.upgrade() {
-                    prompter.recenter();
+                if let Some(notes) = weak.upgrade() {
+                    notes.recenter();
                 }
             });
         });
 
         for (button, forward) in [(&previous_button, false), (&next_button, true)] {
-            let weak = Rc::downgrade(&prompter);
+            let weak = Rc::downgrade(&notes);
             button.connect_clicked(move |_| {
-                if let Some(prompter) = weak.upgrade() {
-                    prompter.jump(forward);
+                if let Some(notes) = weak.upgrade() {
+                    notes.jump(forward);
                 }
             });
         }
@@ -236,10 +236,10 @@ impl Notes {
         let shortcuts = gtk::ShortcutController::new();
         shortcuts.set_scope(gtk::ShortcutScope::Global);
         for (key, forward) in [(gdk::Key::Down, true), (gdk::Key::Up, false)] {
-            let weak = Rc::downgrade(&prompter);
+            let weak = Rc::downgrade(&notes);
             let action = gtk::CallbackAction::new(move |_, _| {
                 match weak.upgrade() {
-                    Some(prompter) if prompter.widget.is_visible() => prompter.jump(forward),
+                    Some(notes) if notes.widget.is_visible() => notes.jump(forward),
                     _ => return glib::Propagation::Proceed,
                 }
                 glib::Propagation::Stop
@@ -247,8 +247,8 @@ impl Notes {
             let trigger = gtk::KeyvalTrigger::new(key, gdk::ModifierType::CONTROL_MASK);
             shortcuts.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(action)));
         }
-        prompter.widget.add_controller(shortcuts);
-        prompter
+        notes.widget.add_controller(shortcuts);
+        notes
     }
 
     pub fn is_loaded(&self) -> bool {
@@ -415,16 +415,16 @@ impl Notes {
         self.edits.set(edit);
         let weak = Rc::downgrade(self);
         glib::timeout_add_local_once(Duration::from_millis(500), move || {
-            let Some(prompter) = weak.upgrade() else {
+            let Some(notes) = weak.upgrade() else {
                 return;
             };
-            if prompter.edits.get() != edit {
+            if notes.edits.get() != edit {
                 return;
             }
-            let Some(path) = prompter.path.borrow().clone() else {
+            let Some(path) = notes.path.borrow().clone() else {
                 return;
             };
-            let buffer = prompter.view.buffer();
+            let buffer = notes.view.buffer();
             let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
             if let Err(err) = std::fs::write(&path, text.as_str()) {
                 eprintln!("{APP_NAME}: could not save {}: {err}", path.display());

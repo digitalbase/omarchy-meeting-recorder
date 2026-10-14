@@ -147,7 +147,7 @@ fn main() -> glib::ExitCode {
                 "  wait          wait until the recording is done and print its folder (--audio: once the audio is saved)"
             );
             println!(
-                "  notes <file> [--name <name>]  show notes next to the recorder, to read from and edit while recording, and name the meeting about to be recorded"
+                "  notes <file> [--name <name>]  show meeting notes next to the recorder, to read from and edit while recording, and name the meeting about to be recorded"
             );
             println!("  transcribe    transcribe two tracks and print the transcript as Markdown");
             println!(

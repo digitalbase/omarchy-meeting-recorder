@@ -30,7 +30,7 @@ const FULL_SIZE: (i32, i32) = (480, 700);
 const COMPACT_SIZE: (i32, i32) = (300, 84);
 const DONE_SIZE: (i32, i32) = (1100, 760);
 /// The recording page with the notes next to it: wider, just as high.
-const PROMPTER_SIZE: (i32, i32) = (1100, FULL_SIZE.1);
+const NOTES_SIZE: (i32, i32) = (1100, FULL_SIZE.1);
 /// The done page with the meeting's notes next to the transcript.
 const DONE_NOTES_SIZE: (i32, i32) = (1560, DONE_SIZE.1);
 /// How wide the notes are next to the transcript.
@@ -900,7 +900,7 @@ impl Recorder {
         overlay.add_overlay(&drop_hint);
         let notes_button = gtk::Button::builder()
             .label("a")
-            .tooltip_text("Notes")
+            .tooltip_text("Meeting notes")
             .css_classes(["flat", "notes-toggle"])
             .halign(gtk::Align::End)
             .valign(gtk::Align::End)
@@ -1903,7 +1903,7 @@ impl Recorder {
         self.fit_window(match (page, prompting) {
             ("done", true) => DONE_NOTES_SIZE,
             ("done", false) => DONE_SIZE,
-            ("record", true) => PROMPTER_SIZE,
+            ("record", true) => NOTES_SIZE,
             _ => FULL_SIZE,
         });
         let immersive = matches!(state, State::Stopping | State::Transcribing);
@@ -1926,7 +1926,7 @@ impl Recorder {
             (820, 560)
         } else if size == DONE_NOTES_SIZE {
             (820 + DONE_NOTES_WIDTH, 560)
-        } else if size == PROMPTER_SIZE {
+        } else if size == NOTES_SIZE {
             (900, 600)
         } else {
             (360, 200)
