@@ -54,7 +54,7 @@ Turn on **Webcam** and your camera is recorded next to the audio, as `webcam.mp4
 
 ### Keeps your notes next to the recording
 
-The **a** in the corner of the ready page opens notes next to the recorder: the script of a voice-over, or what you want to say in a meeting. The paragraph with the cursor is lit and kept in the middle; ↓ and ↑ (or Ctrl+↓ and Ctrl+↑ while you type) move to the next and the previous one, and every edit is saved right away. `omarchy-meeting-recorder notes <file>` opens a file of your own there. A recording made with notes open keeps a copy as `notes.md` in its meeting folder, and the done page shows it next to the transcript.
+The **a** in the corner of the ready page opens notes next to the recorder, empty in a new window: the script of a voice-over, or what you want to say in a meeting. The paragraph with the cursor is lit and kept in the middle; ↓ and ↑ (or Ctrl+↓ and Ctrl+↑ while you type) move to the next and the previous one, and every edit is saved right away. `omarchy-meeting-recorder notes <file>` opens a file of your own there. A recording made with notes open keeps a copy as `notes.md` in its meeting folder, and the done page shows it next to the transcript.
 
 ### Stays out of the way
 

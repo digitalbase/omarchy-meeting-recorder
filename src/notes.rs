@@ -23,16 +23,14 @@ use crate::APP_NAME;
 /// The notes in a meeting folder, when they were open as it was recorded.
 pub const NOTES_FILE: &str = "notes.md";
 
-/// The notes the [a] button opens when none were open yet: a file of the
-/// app's own, made empty the first time, to type in.
-pub fn default_notes() -> PathBuf {
+/// The notes the [a] button opens when none were open yet in this window: a
+/// file of the app's own, emptied each time, so a new window starts blank.
+pub fn fresh_notes() -> PathBuf {
     let path = glib::user_data_dir().join(APP_NAME).join("notes.md");
-    if !path.exists() {
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(&path, "");
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
     }
+    let _ = std::fs::write(&path, "");
     path
 }
 

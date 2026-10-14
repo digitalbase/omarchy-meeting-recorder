@@ -1139,7 +1139,7 @@ impl Recorder {
                 r.notes.unload();
                 r.show_page();
             } else {
-                let path = r.notes.last_path().unwrap_or_else(crate::notes::default_notes);
+                let path = r.notes.last_path().unwrap_or_else(crate::notes::fresh_notes);
                 r.open_notes(&path);
             }
         });
