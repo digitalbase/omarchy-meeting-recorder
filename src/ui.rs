@@ -225,7 +225,7 @@ impl Hub {
             if command == "notes" {
                 r.open_notes(std::path::Path::new(title));
             } else if r.state.get() == State::Idle {
-                r.title_row.set_text(title);
+                set_name(&r.title_row, title);
             }
             r.window.present();
             return;
@@ -244,7 +244,7 @@ impl Hub {
                     r.ready();
                 }
                 if !title.is_empty() {
-                    r.title_row.set_text(title);
+                    set_name(&r.title_row, title);
                 }
                 r.start();
             }
@@ -1355,7 +1355,7 @@ impl Recorder {
             if let Some(r) = weak.upgrade()
                 && r.title_row.text() != row.text()
             {
-                r.title_row.set_text(&row.text());
+                set_name(&r.title_row, &row.text());
             }
         });
         let weak = Rc::downgrade(self);
@@ -1661,8 +1661,8 @@ impl Recorder {
         let Some((_, manifest)) = meeting::open(dir) else {
             return;
         };
-        self.done_title_row.set_text(&manifest.title);
-        self.title_row.set_text(&manifest.title);
+        set_name(&self.done_title_row, &manifest.title);
+        set_name(&self.title_row, &manifest.title);
         *self.manifest.borrow_mut() = Some(manifest);
         if let Ok(text) = std::fs::read_to_string(dir.join("transcript.md")) {
             self.redraw_transcript(&text);
@@ -2131,7 +2131,7 @@ impl Recorder {
         }
 
         self.player.unload();
-        self.title_row.set_text(&title);
+        set_name(&self.title_row, &title);
         self.started_at.set(started_at);
         *self.result_dir.borrow_mut() = Some(out.clone());
         *self.manifest.borrow_mut() = Some(Manifest {
@@ -2276,7 +2276,7 @@ impl Recorder {
             format: settings::load_format(),
             language: settings::load_language().to_owned(),
         });
-        self.title_row.set_text(&note.title);
+        set_name(&self.title_row, &note.title);
         if let Some(i) = Format::ALL.iter().position(|f| *f == note.format) {
             self.format_row.set_selected(i as u32);
         }
@@ -2362,7 +2362,7 @@ impl Recorder {
         self.player.unload();
         *self.result_dir.borrow_mut() = None;
         *self.manifest.borrow_mut() = None;
-        self.title_row.set_text("");
+        set_name(&self.title_row, "");
         self.timer.set_label("00:00");
         self.compact_timer.set_label("00:00");
         // The meeting's notes stay with the meeting; the ones recorded with come back.
@@ -2393,7 +2393,7 @@ impl Recorder {
                 .and_then(|now| now.format("Meeting %H:%M"))
                 .map(|s| s.to_string())
                 .unwrap_or_else(|_| "Meeting".to_owned());
-            self.title_row.set_text(&title);
+            set_name(&self.title_row, &title);
         }
         self.paused.set(false);
         self.paused_secs.set(0);
@@ -2721,7 +2721,7 @@ impl Recorder {
     }
 
     fn finished(self: &Rc<Self>, audio_ok: bool, transcript: Result<(), String>) {
-        self.done_title_row.set_text(&self.title_row.text());
+        set_name(&self.done_title_row, &self.title_row.text());
         self.set_state(State::Done);
         if let Some(dir) = self.result_dir.borrow().clone() {
             self.show_meeting_notes(&dir);
@@ -2840,8 +2840,8 @@ impl Recorder {
         self.loading.set(false);
 
         self.started_at.set(manifest.started_at);
-        self.title_row.set_text(&manifest.title);
-        self.done_title_row.set_text(&manifest.title);
+        set_name(&self.title_row, &manifest.title);
+        set_name(&self.done_title_row, &manifest.title);
         *self.manifest.borrow_mut() = Some(manifest);
         *self.result_dir.borrow_mut() = Some(dir.clone());
         self.set_state(State::Done);
@@ -4103,6 +4103,14 @@ fn on_screen(window: &serde_json::Value) -> Option<(i64, i64)> {
     let nx = x.min(right - w).max(left);
     let ny = y.min(bottom - h).max(top);
     (nx != x || ny != y).then_some((nx, ny))
+}
+
+/// Fills in a meeting name that nobody typed: without the apply button,
+/// which would ask to confirm a change that was never made.
+fn set_name(row: &adw::EntryRow, text: &str) {
+    row.set_show_apply_button(false);
+    row.set_text(text);
+    row.set_show_apply_button(true);
 }
 
 /// Repaints a widget and everything in it, for custom drawing after a theme switch.
