@@ -1,7 +1,7 @@
 //! Meeting notes: a panel next to the recorder with text to read from while
 //! recording and to edit on the spot, like the script of a voice-over.
 //!
-//! `omarchy-meeting-recorder notes <file>` opens it in the recorder
+//! `omarchy-meeting-recorder --notes <file>` opens it in the recorder
 //! window, and so does the [a] in the corner of the recording page. The paragraph with the
 //! cursor is lit and the others are dimmed. Ctrl+↓ and Ctrl+↑, or the buttons
 //! above the text, move to the next and the previous paragraph and keep it in

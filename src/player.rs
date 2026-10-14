@@ -109,10 +109,7 @@ impl Playback {
         let now = self.position_us();
         let (_, frames) = self.video.as_ref()?;
         let mut due = None;
-        loop {
-            let Some((at, frame)) = self.next_frame.take().or_else(|| frames.try_recv().ok()) else {
-                break;
-            };
+        while let Some((at, frame)) = self.next_frame.take().or_else(|| frames.try_recv().ok()) {
             if at > now {
                 self.next_frame = Some((at, frame));
                 break;

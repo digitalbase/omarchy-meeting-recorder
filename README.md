@@ -54,7 +54,7 @@ Turn on **Webcam** and your camera is recorded next to the audio, as `webcam.mp4
 
 ### Keeps your meeting notes next to the recording
 
-The **a** in the corner of the ready page opens meeting notes next to the recorder, empty in a new window: the script of a voice-over, or what you want to say in a meeting. The paragraph with the cursor is lit and kept in the middle; ↓ and ↑ (or Ctrl+↓ and Ctrl+↑ while you type) move to the next and the previous one, and every edit is saved right away. `omarchy-meeting-recorder notes <file>` opens a file of your own there. A recording made with meeting notes open keeps a copy as `notes.md` in its meeting folder, and the done page shows it next to the transcript.
+The **a** in the corner of the ready page opens meeting notes next to the recorder, empty in a new window: the script of a voice-over, or what you want to say in a meeting. The paragraph with the cursor is lit and kept in the middle; ↓ and ↑ (or Ctrl+↓ and Ctrl+↑ while you type) move to the next and the previous one, and every edit is saved right away. `omarchy-meeting-recorder --notes <file>` opens a file of your own there. A recording made with meeting notes open keeps a copy as `notes.md` in its meeting folder, and the done page shows it next to the transcript.
 
 ### Stays out of the way
 
@@ -267,24 +267,24 @@ This also recovers a failed first-start “Add to Bar” attempt in version 1.0.
 
 | Command | What it does |
 |---|---|
-| `omarchy-meeting-recorder` | Open the recorder, ready to record |
+| `omarchy-meeting-recorder [--name <name>] [--notes <file>]` | Open the recorder, ready to record. `--name` names the meeting about to be recorded, whoever presses Start; `--notes` shows a file as meeting notes next to the recorder, to read from and edit while recording |
 | `omarchy-meeting-recorder <folder or .meeting-recorder file>` | Open a saved meeting on the done page |
-| `omarchy-meeting-recorder start [--name <name>]` | Start recording, for a keybinding; opens the recorder first when it is not running. With a name, the meeting gets that name (a script can pass a calendar event's title); the name without `--name` works too |
+| `omarchy-meeting-recorder start [--name <name>] [--notes <file>]` | Start recording, for a keybinding; opens the recorder first when it is not running. With a name, the meeting gets that name (a script can pass a calendar event's title); the name without `--name` works too. With notes, they open next to the recorder |
 | `omarchy-meeting-recorder pause` | Pause or resume the running recording |
 | `omarchy-meeting-recorder stop` | Stop the running recording |
 | `omarchy-meeting-recorder compact` | Switch the recording window between full and compact |
 | `omarchy-meeting-recorder new-window` | Open another window, or the app when it is not running |
 | `omarchy-meeting-recorder watch` | Stream the recorder state as NDJSON, for the bar widget; a line carries the meeting's `folder` once it has one |
 | `omarchy-meeting-recorder wait [--audio]` | Wait until the meeting being recorded is done and print its folder, for a script or an agent; with `--audio` as soon as the audio is saved, before the transcript |
-| `omarchy-meeting-recorder notes <file> [--name <name>]` | Show a file as meeting notes next to the recorder, to read from and edit while recording; with a name, the meeting about to be recorded gets it, whoever presses Start |
 | `omarchy-meeting-recorder transcribe <mic> <computer> [--language xx] [--model name]` | Transcribe two tracks and print the transcript as Markdown |
 | `omarchy-meeting-recorder transcribe-file <audio> [--speakers N] [--language xx] [--model name]` | Transcribe one file, telling the voices apart, and print the transcript as Markdown |
 | `omarchy-meeting-recorder ask "<prompt>" < text` | Run a prompt over stdin through the default agent, without tools (`ask --agent` shows which agent that is) |
 | `omarchy-meeting-recorder action "<name>" <meeting folder>` | Run one of your [actions](docs/actions.md) on a meeting, as the done page does; without arguments it lists them |
 
-For example:
+Every flag takes its value after a space or an equals sign: `--name "Weekly sync"` and `--name="Weekly sync"` are the same. For example:
 
 ```bash
+omarchy-meeting-recorder --notes script.md --name "Voice-over"
 omarchy-meeting-recorder transcribe mic.ogg computer.ogg --language en > transcript.md
 omarchy-meeting-recorder transcribe-file interview.mp3 --speakers 2 > transcript.md
 ```

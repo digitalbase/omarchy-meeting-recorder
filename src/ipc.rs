@@ -225,7 +225,7 @@ pub fn start_line(title: &[String]) -> String {
     }
 }
 
-/// `notes <file> --name <name>`: the line that names the meeting about to be
+/// `--name <name>`: the line that names the meeting about to be
 /// recorded, without starting it. None without a name.
 pub fn name_line(title: &[String]) -> Option<String> {
     let title = title
@@ -236,7 +236,7 @@ pub fn name_line(title: &[String]) -> Option<String> {
     (!title.is_empty()).then(|| format!("name {title}"))
 }
 
-/// `omarchy-meeting-recorder notes <file>`: the line that opens those notes.
+/// `omarchy-meeting-recorder --notes <file>`: the line that opens those notes.
 /// None for a path that would add a line.
 pub fn notes_line(path: &std::path::Path) -> Option<String> {
     let path = path.to_str()?;
