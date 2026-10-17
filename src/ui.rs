@@ -1482,6 +1482,47 @@ impl Recorder {
         });
 
         let weak = Rc::downgrade(self);
+        self.player.connect_trim(move |until_us| {
+            let Some(r) = weak.upgrade() else { return };
+            let Some(dir) = r.result_dir.borrow().clone() else { return };
+            let dialog = adw::AlertDialog::new(
+                Some("Remove everything after the playhead?"),
+                Some(&format!("Keep the first {}:{:02}:{:02} and transcribe it again. A new trimmed meeting will be created. The original recording and transcript stay unchanged.", until_us / 3_600_000_000, until_us / 60_000_000 % 60, until_us / 1_000_000 % 60)),
+            );
+            dialog.add_response("cancel", "Cancel");
+            dialog.add_response("trim", "Trim and transcribe");
+            dialog.set_default_response(Some("cancel"));
+            dialog.set_close_response("cancel");
+            let this = r.clone();
+            dialog.connect_response(None, move |_, response| {
+                if response != "trim" || this.state.get() != State::Done { return; }
+                let this = this.clone();
+                let dir = dir.clone();
+                this.player.unload();
+                this.set_state(State::Stopping);
+                glib::spawn_future_local(async move {
+                    match gio::spawn_blocking(move || crate::trim::copy_until(&dir, until_us)).await {
+                        Ok(Ok(out)) => {
+                            this.set_state(State::Done);
+                            this.open_meeting(&out);
+                            this.again_button.emit_clicked();
+                        }
+                        result => {
+                            this.set_state(State::Done);
+                            if let Some(dir) = this.result_dir.borrow().as_ref() { this.player.load(dir); }
+                            let error = match result {
+                                Ok(Err(error)) => error,
+                                _ => "Trimming stopped unexpectedly".into(),
+                            };
+                            this.toast(&error);
+                        }
+                    }
+                });
+            });
+            dialog.present(Some(&r.window));
+        });
+
+        let weak = Rc::downgrade(self);
         self.window.connect_close_request(move |_| {
             let Some(r) = weak.upgrade() else {
                 return glib::Propagation::Proceed;

@@ -258,6 +258,8 @@ pub struct Player {
     state: Rc<RefCell<State>>,
     /// Called with the position in ms while playing, for the transcript highlight.
     on_position: PositionCallback,
+    on_trim: PositionCallback,
+    trim: gtk::Button,
     ticking: Rc<Cell<bool>>,
 }
 
@@ -310,6 +312,13 @@ impl Player {
         root.append(&button);
         root.append(&wave);
         root.append(&time);
+        let trim = gtk::Button::builder()
+            .icon_name("edit-cut-symbolic")
+            .tooltip_text("Remove everything after the playhead")
+            .css_classes(["circular", "flat"])
+            .sensitive(false)
+            .build();
+        root.append(&trim);
 
         let player = Player {
             root,
@@ -321,6 +330,8 @@ impl Player {
             time,
             state: Rc::default(),
             on_position: Rc::default(),
+            on_trim: Rc::default(),
+            trim,
             ticking: Rc::default(),
         };
 
@@ -331,6 +342,13 @@ impl Player {
 
         let this = player.clone();
         player.button.connect_clicked(move |_| this.toggle());
+        let this = player.clone();
+        player.trim.connect_clicked(move |_| {
+            this.pause();
+            if let Some(callback) = this.on_trim.borrow().as_ref() {
+                callback(this.position_us());
+            }
+        });
 
         // Click or drag anywhere on the waveform to seek.
         let drag = gtk::GestureDrag::new();
@@ -373,6 +391,10 @@ impl Player {
 
     pub fn connect_position(&self, callback: impl Fn(i64) + 'static) {
         *self.on_position.borrow_mut() = Some(Box::new(callback));
+    }
+
+    pub fn connect_trim(&self, callback: impl Fn(i64) + 'static) {
+        *self.on_trim.borrow_mut() = Some(Box::new(callback));
     }
 
     /// Loads the meeting in `dir`: its audio for playback, its tracks for the waveform.
@@ -633,6 +655,7 @@ impl Player {
 
     fn refresh(&self) {
         let (position, duration) = (self.position_us(), self.duration_us());
+        self.trim.set_sensitive(position > 0 && position < duration);
         self.time.set_label(&format!(
             "{} / {}",
             clock(position / 1_000_000),
