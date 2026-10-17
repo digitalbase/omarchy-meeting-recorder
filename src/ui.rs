@@ -1483,13 +1483,14 @@ impl Recorder {
         });
 
         let weak = Rc::downgrade(self);
-        self.player.connect_trim(move |until_us| {
+        self.player.connect_trim(move |start_us, until_us, duration_us| {
             let Some(r) = weak.upgrade() else { return };
             let Some(dir) = r.result_dir.borrow().clone() else { return };
             let dialog = adw::AlertDialog::new(
-                Some("Remove everything after the playhead?"),
-                Some(&format!("Keep the first {}:{:02}:{:02}. Audio, webcam video, and transcript entries after this point will be excluded from the new trimmed meeting. A transcript entry crossing the cut may still contain words spoken after it, because timestamps mark entry starts, not individual words. The original meeting stays unchanged.", until_us / 3_600_000_000, until_us / 60_000_000 % 60, until_us / 1_000_000 % 60)),
+                Some("Save selected section?"),
+                Some(&format!("Selection: {} to {}.\n\nThe selected audio, webcam video, and transcript will become a new meeting. Sections before and after it will be saved as separate meetings. The original stays unchanged.\n\nTranscript entries are split by their start times, not individual words. Review text near the cuts for missing or extra words.", crate::chapters::clock(start_us / 1000), crate::chapters::clock(until_us / 1000))),
             );
+            dialog.set_presentation_mode(adw::DialogPresentationMode::Floating);
             dialog.add_response("cancel", "Cancel");
             dialog.add_response("trim", "Save trimmed copy");
             dialog.set_default_response(Some("cancel"));
@@ -1502,7 +1503,20 @@ impl Recorder {
                 this.player.unload();
                 this.set_state(State::Stopping);
                 glib::spawn_future_local(async move {
-                    match gio::spawn_blocking(move || crate::trim::copy_until(&dir, until_us)).await {
+                    match gio::spawn_blocking(move || {
+                        let mut created = Vec::new();
+                        let result = (|| {
+                            let selected = crate::trim::copy_range(&dir, start_us, until_us, "selected")?;
+                            created.push(selected.clone());
+                            if start_us > 0 { created.push(crate::trim::copy_range(&dir, 0, start_us, "before")?); }
+                            if until_us < duration_us { created.push(crate::trim::copy_range(&dir, until_us, duration_us, "after")?); }
+                            Ok::<_, String>(selected)
+                        })();
+                        if result.is_err() {
+                            for path in created { let _ = std::fs::remove_dir_all(path); }
+                        }
+                        result
+                    }).await {
                         Ok(Ok(out)) => {
                             this.set_state(State::Done);
                             this.open_meeting(&out);

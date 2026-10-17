@@ -2,8 +2,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub fn copy_until(dir: &Path, until_us: i64) -> Result<PathBuf, String> {
-    if until_us <= 0 {
+pub fn copy_range(dir: &Path, start_us: i64, until_us: i64, label: &str) -> Result<PathBuf, String> {
+    if start_us < 0 || until_us <= start_us {
         return Err("Choose a cut point after the start of the recording".into());
     }
     let (_, mut manifest) = crate::meeting::open(dir).ok_or("Cannot open meeting")?;
@@ -14,7 +14,7 @@ pub fn copy_until(dir: &Path, until_us: i64) -> Result<PathBuf, String> {
         .to_string_lossy();
     let mut n = 1;
     let out = loop {
-        let candidate = parent.join(format!("{name} (trimmed {n})"));
+        let candidate = parent.join(format!("{name} ({label} {n})"));
         match std::fs::create_dir(&candidate) {
             Ok(()) => break candidate,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => n += 1,
@@ -41,7 +41,7 @@ pub fn copy_until(dir: &Path, until_us: i64) -> Result<PathBuf, String> {
             let mut cmd = Command::new("ffmpeg");
             cmd.args(["-v", "error", "-nostdin", "-i"])
                 .arg(&source)
-                .args(["-t", &format!("{:.6}", until_us as f64 / 1_000_000.0)]);
+                .args(["-ss", &format!("{:.6}", start_us as f64 / 1_000_000.0), "-t", &format!("{:.6}", (until_us - start_us) as f64 / 1_000_000.0)]);
             if file.ends_with(".ogg") {
                 cmd.args(["-c:a", "libopus"]);
             }
@@ -67,13 +67,15 @@ pub fn copy_until(dir: &Path, until_us: i64) -> Result<PathBuf, String> {
             std::fs::copy(audio, out.join(".tracks/source.ogg")).map_err(|e| e.to_string())?;
             manifest.imported = Some("audio.ogg".into());
         }
-        manifest.title = format!("{} (trimmed)", manifest.title);
-        manifest.duration_secs = until_us / 1_000_000;
-        manifest.chapters.retain(|chapter| chapter.start_ms < until_us / 1000);
+        manifest.title = format!("{} ({label})", manifest.title);
+        manifest.started_at += start_us / 1_000_000;
+        manifest.duration_secs = (until_us - start_us) / 1_000_000;
+        manifest.chapters.retain(|chapter| chapter.start_ms >= start_us / 1000 && chapter.start_ms < until_us / 1000);
+        for chapter in &mut manifest.chapters { chapter.start_ms -= start_us / 1000; }
         let transcript = dir.join("transcript.md");
         if transcript.is_file() {
             let text = std::fs::read_to_string(transcript).map_err(|e| e.to_string())?;
-            let text = trim_transcript(&text, until_us / 1000);
+            let text = trim_transcript(&text, start_us / 1000, until_us / 1000);
             let text = crate::chapters::apply_to_markdown(&text, &manifest.chapters);
             std::fs::write(out.join("transcript.md"), text).map_err(|e| e.to_string())?;
         }
@@ -91,7 +93,7 @@ pub fn copy_until(dir: &Path, until_us: i64) -> Result<PathBuf, String> {
     result
 }
 
-fn trim_transcript(text: &str, until_ms: i64) -> String {
+fn trim_transcript(text: &str, start_ms: i64, until_ms: i64) -> String {
     let mut kept = String::new();
     let mut keep = true;
     for line in text.lines() {
@@ -101,10 +103,16 @@ fn trim_transcript(text: &str, until_ms: i64) -> String {
             let seconds = time.split(':').try_fold(0i64, |total, part| {
                 total.checked_mul(60)?.checked_add(part.parse::<i64>().ok()?)
             });
-            keep = seconds.is_none_or(|seconds| seconds.saturating_mul(1000) < until_ms);
+            keep = seconds.is_some_and(|seconds| seconds.saturating_mul(1000) >= start_ms && seconds.saturating_mul(1000) < until_ms);
+            if keep {
+                let shifted = crate::chapters::clock(seconds.unwrap() * 1000 - start_ms);
+                kept.push_str(&line.replacen(&format!("**[{time}]"), &format!("**[{shifted}]"), 1));
+                kept.push('\n');
+                continue;
+            }
         }
         if line.starts_with("- **Duration:** ") {
-            kept.push_str(&format!("- **Duration:** {}\n", crate::chapters::clock(until_ms)));
+            kept.push_str(&format!("- **Duration:** {}\n", crate::chapters::clock(until_ms - start_ms)));
         } else if keep {
             kept.push_str(line);
             kept.push('\n');
@@ -118,9 +126,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn range_rebases_timestamps_and_excludes_both_ends() {
+        let text = "## Transcript\n\n**[00:05] You:** Before\n**[00:10] You:** Selected\n**[00:20] You:** After\n";
+        let result = trim_transcript(text, 10_000, 20_000);
+        assert!(result.contains("**[00:00] You:** Selected"));
+        assert!(!result.contains("Before"));
+        assert!(!result.contains("After"));
+    }
+
+    #[test]
     fn trims_entries_at_or_after_cut_and_their_continuations() {
         let text = "- **Duration:** 3:00:00\n\n## Transcript\n\n**[59:58] You:** Keep\ncontinued\n\n**[1:00:00] Remote:** Remove\ncontinued too\n";
-        let result = trim_transcript(text, 3_600_000);
+        let result = trim_transcript(text, 0, 3_600_000);
         assert!(result.contains("- **Duration:** 1:00:00"));
         assert!(result.contains("Keep\ncontinued"));
         assert!(!result.contains("Remove"));
@@ -131,7 +148,7 @@ mod tests {
     fn rejects_empty_or_negative_cut_before_creating_a_copy() {
         for cut in [0, -1] {
             assert!(
-                copy_until(Path::new("/nonexistent/meeting"), cut)
+                copy_range(Path::new("/nonexistent/meeting"), 0, cut, "selected")
                     .unwrap_err()
                     .contains("cut point")
             );
@@ -140,6 +157,6 @@ mod tests {
 
     #[test]
     fn rejects_missing_meeting() {
-        assert!(copy_until(Path::new("/nonexistent/meeting"), 1_000_000).is_err());
+        assert!(copy_range(Path::new("/nonexistent/meeting"), 0, 1_000_000, "selected").is_err());
     }
 }
