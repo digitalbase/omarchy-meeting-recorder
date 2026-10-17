@@ -259,8 +259,9 @@ impl Hub {
 /// Runs the app. `open` is a `.meeting-recorder` file or a meeting folder to show
 /// instead of starting a new recording.
 pub fn run(open: Option<&str>) -> glib::ExitCode {
+    let app_id = std::env::var("MEETING_RECORDER_APP_ID").unwrap_or_else(|_| APP_ID.into());
     let app = adw::Application::builder()
-        .application_id(APP_ID)
+        .application_id(&app_id)
         .flags(gio::ApplicationFlags::HANDLES_OPEN)
         .build();
     app.connect_startup(|app| {
@@ -1487,10 +1488,10 @@ impl Recorder {
             let Some(dir) = r.result_dir.borrow().clone() else { return };
             let dialog = adw::AlertDialog::new(
                 Some("Remove everything after the playhead?"),
-                Some(&format!("Keep the first {}:{:02}:{:02} and transcribe it again. A new trimmed meeting will be created. The original recording and transcript stay unchanged.", until_us / 3_600_000_000, until_us / 60_000_000 % 60, until_us / 1_000_000 % 60)),
+                Some(&format!("Keep the first {}:{:02}:{:02}. Audio, webcam video, and transcript entries after this point will be excluded from the new trimmed meeting. A transcript entry crossing the cut may still contain words spoken after it, because timestamps mark entry starts, not individual words. The original meeting stays unchanged.", until_us / 3_600_000_000, until_us / 60_000_000 % 60, until_us / 1_000_000 % 60)),
             );
             dialog.add_response("cancel", "Cancel");
-            dialog.add_response("trim", "Trim and transcribe");
+            dialog.add_response("trim", "Save trimmed copy");
             dialog.set_default_response(Some("cancel"));
             dialog.set_close_response("cancel");
             let this = r.clone();
@@ -1505,7 +1506,6 @@ impl Recorder {
                         Ok(Ok(out)) => {
                             this.set_state(State::Done);
                             this.open_meeting(&out);
-                            this.again_button.emit_clicked();
                         }
                         result => {
                             this.set_state(State::Done);

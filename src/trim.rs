@@ -69,8 +69,14 @@ pub fn copy_until(dir: &Path, until_us: i64) -> Result<PathBuf, String> {
         }
         manifest.title = format!("{} (trimmed)", manifest.title);
         manifest.duration_secs = until_us / 1_000_000;
-        manifest.chapters.clear();
-        manifest.chapters_by = None;
+        manifest.chapters.retain(|chapter| chapter.start_ms < until_us / 1000);
+        let transcript = dir.join("transcript.md");
+        if transcript.is_file() {
+            let text = std::fs::read_to_string(transcript).map_err(|e| e.to_string())?;
+            let text = trim_transcript(&text, until_us / 1000);
+            let text = crate::chapters::apply_to_markdown(&text, &manifest.chapters);
+            std::fs::write(out.join("transcript.md"), text).map_err(|e| e.to_string())?;
+        }
         let notes = dir.join(crate::notes::NOTES_FILE);
         if notes.is_file() {
             std::fs::copy(notes, out.join(crate::notes::NOTES_FILE)).map_err(|e| e.to_string())?;
@@ -85,9 +91,41 @@ pub fn copy_until(dir: &Path, until_us: i64) -> Result<PathBuf, String> {
     result
 }
 
+fn trim_transcript(text: &str, until_ms: i64) -> String {
+    let mut kept = String::new();
+    let mut keep = true;
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("**[")
+            && let Some((time, _)) = rest.split_once("] ")
+        {
+            let seconds = time.split(':').try_fold(0i64, |total, part| {
+                total.checked_mul(60)?.checked_add(part.parse::<i64>().ok()?)
+            });
+            keep = seconds.is_none_or(|seconds| seconds.saturating_mul(1000) < until_ms);
+        }
+        if line.starts_with("- **Duration:** ") {
+            kept.push_str(&format!("- **Duration:** {}\n", crate::chapters::clock(until_ms)));
+        } else if keep {
+            kept.push_str(line);
+            kept.push('\n');
+        }
+    }
+    kept
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trims_entries_at_or_after_cut_and_their_continuations() {
+        let text = "- **Duration:** 3:00:00\n\n## Transcript\n\n**[59:58] You:** Keep\ncontinued\n\n**[1:00:00] Remote:** Remove\ncontinued too\n";
+        let result = trim_transcript(text, 3_600_000);
+        assert!(result.contains("- **Duration:** 1:00:00"));
+        assert!(result.contains("Keep\ncontinued"));
+        assert!(!result.contains("Remove"));
+        assert!(!result.contains("continued too"));
+    }
 
     #[test]
     fn rejects_empty_or_negative_cut_before_creating_a_copy() {
