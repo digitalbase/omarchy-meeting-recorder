@@ -2,7 +2,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub fn copy_range(dir: &Path, start_us: i64, until_us: i64, label: &str) -> Result<PathBuf, String> {
+pub fn copy_range(dir: &Path, start_us: i64, until_us: i64, label: &str, reencode: bool) -> Result<PathBuf, String> {
     if start_us < 0 || until_us <= start_us {
         return Err("Choose a cut point after the start of the recording".into());
     }
@@ -39,10 +39,15 @@ pub fn copy_range(dir: &Path, start_us: i64, until_us: i64, label: &str) -> Resu
             let target = out.join(file);
             std::fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
             let mut cmd = Command::new("ffmpeg");
-            cmd.args(["-v", "error", "-nostdin", "-i"])
-                .arg(&source)
-                .args(["-ss", &format!("{:.6}", start_us as f64 / 1_000_000.0), "-t", &format!("{:.6}", (until_us - start_us) as f64 / 1_000_000.0)]);
-            if file.ends_with(".ogg") {
+            cmd.args(["-v", "error", "-nostdin"]);
+            let start = format!("{:.6}", start_us as f64 / 1_000_000.0);
+            if !reencode { cmd.args(["-ss", &start]); }
+            cmd.arg("-i").arg(&source);
+            if reencode { cmd.args(["-ss", &start]); }
+            cmd.args(["-t", &format!("{:.6}", (until_us - start_us) as f64 / 1_000_000.0)]);
+            if !reencode {
+                cmd.args(["-c", "copy"]);
+            } else if file.ends_with(".ogg") {
                 cmd.args(["-c:a", "libopus"]);
             }
             let output = cmd.arg(&target).output().map_err(|e| e.to_string())?;
@@ -148,7 +153,7 @@ mod tests {
     fn rejects_empty_or_negative_cut_before_creating_a_copy() {
         for cut in [0, -1] {
             assert!(
-                copy_range(Path::new("/nonexistent/meeting"), 0, cut, "selected")
+                copy_range(Path::new("/nonexistent/meeting"), 0, cut, "selected", false)
                     .unwrap_err()
                     .contains("cut point")
             );
@@ -157,6 +162,6 @@ mod tests {
 
     #[test]
     fn rejects_missing_meeting() {
-        assert!(copy_range(Path::new("/nonexistent/meeting"), 0, 1_000_000, "selected").is_err());
+        assert!(copy_range(Path::new("/nonexistent/meeting"), 0, 1_000_000, "selected", false).is_err());
     }
 }

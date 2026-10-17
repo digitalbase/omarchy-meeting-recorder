@@ -1491,13 +1491,22 @@ impl Recorder {
                 Some(&format!("Selection: {} to {}.\n\nThe selected audio, webcam video, and transcript will become a new meeting. Sections before and after it will be saved as separate meetings. The original stays unchanged.\n\nTranscript entries are split by their start times, not individual words. Review text near the cuts for missing or extra words.", crate::chapters::clock(start_us / 1000), crate::chapters::clock(until_us / 1000))),
             );
             dialog.set_presentation_mode(adw::DialogPresentationMode::Floating);
+            let options = gtk::Label::builder()
+                .label("Fast: copy media without re-encoding. Cuts can land near the selection, especially at video keyframes; timing may differ slightly between tracks.\n\nPrecise: re-encode audio and video at the selected times. Slower and CPU-intensive. Neither option transcribes again.")
+                .wrap(true)
+                .max_width_chars(48)
+                .xalign(0.0)
+                .build();
+            dialog.set_extra_child(Some(&options));
             dialog.add_response("cancel", "Cancel");
-            dialog.add_response("trim", "Save trimmed copy");
+            dialog.add_response("fast", "Fast · copy media");
+            dialog.add_response("precise", "Precise · re-encode");
             dialog.set_default_response(Some("cancel"));
             dialog.set_close_response("cancel");
             let this = r.clone();
             dialog.connect_response(None, move |_, response| {
-                if response != "trim" || this.state.get() != State::Done { return; }
+                if !matches!(response, "fast" | "precise") || this.state.get() != State::Done { return; }
+                let reencode = response == "precise";
                 let this = this.clone();
                 let dir = dir.clone();
                 this.player.unload();
@@ -1506,10 +1515,10 @@ impl Recorder {
                     match gio::spawn_blocking(move || {
                         let mut created = Vec::new();
                         let result = (|| {
-                            let selected = crate::trim::copy_range(&dir, start_us, until_us, "selected")?;
+                            let selected = crate::trim::copy_range(&dir, start_us, until_us, "selected", reencode)?;
                             created.push(selected.clone());
-                            if start_us > 0 { created.push(crate::trim::copy_range(&dir, 0, start_us, "before")?); }
-                            if until_us < duration_us { created.push(crate::trim::copy_range(&dir, until_us, duration_us, "after")?); }
+                            if start_us > 0 { created.push(crate::trim::copy_range(&dir, 0, start_us, "before", reencode)?); }
+                            if until_us < duration_us { created.push(crate::trim::copy_range(&dir, until_us, duration_us, "after", reencode)?); }
                             Ok::<_, String>(selected)
                         })();
                         if result.is_err() {
