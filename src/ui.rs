@@ -1488,16 +1488,18 @@ impl Recorder {
             let Some(dir) = r.result_dir.borrow().clone() else { return };
             let dialog = adw::AlertDialog::new(
                 Some("Save selected section?"),
-                Some(&format!("Selection: {} to {}.\n\nThe selected audio, webcam video, and transcript will become a new meeting. Sections before and after it will be saved as separate meetings. The original stays unchanged.\n\nTranscript entries are split by their start times, not individual words. Review text near the cuts for missing or extra words.", crate::chapters::clock(start_us / 1000), crate::chapters::clock(until_us / 1000))),
+                None,
             );
             dialog.set_presentation_mode(adw::DialogPresentationMode::Floating);
             dialog.set_prefer_wide_layout(true);
             dialog.set_content_width(640);
             let options = gtk::Label::builder()
-                .label("Fast: copy media without re-encoding. Cuts can land near the selection, especially at video keyframes; timing may differ slightly between tracks.\n\nPrecise: re-encode audio and video at the selected times. Slower and CPU-intensive. Neither option transcribes again.")
+                .label(format!("Selection: {} to {}\n\nSave the selected audio, webcam video, and transcript as a new meeting. Sections before and after it are saved separately. Your original stays unchanged.\n\nFast copies media without re-encoding. Cuts may fall near the selection, especially for video, and timing can differ slightly between tracks.\n\nPrecise re-encodes at the selected times. It takes longer and uses more CPU. Neither option transcribes again.\n\nReview transcript text near the cuts. Entries are split by their start times, not individual words.", crate::chapters::clock(start_us / 1000), crate::chapters::clock(until_us / 1000)))
                 .wrap(true)
                 .max_width_chars(72)
                 .xalign(0.0)
+                .halign(gtk::Align::Fill)
+                .hexpand(true)
                 .build();
             dialog.set_extra_child(Some(&options));
             dialog.add_response("cancel", "Cancel");
