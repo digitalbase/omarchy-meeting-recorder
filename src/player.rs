@@ -360,7 +360,6 @@ impl Player {
         let drag = gtk::GestureDrag::new();
         let this = player.clone();
         drag.connect_drag_begin(move |_, x, _| {
-            this.pause();
             this.state.borrow_mut().selection = None;
             this.seek_to_x(x);
         });
@@ -368,6 +367,7 @@ impl Player {
         drag.connect_drag_update(move |gesture, dx, _| {
             if let Some((x, _)) = gesture.start_point() {
                 if dx.abs() >= 4.0 {
+                    if this.is_playing() { this.pause(); }
                     let a = this.time_at_x(x);
                     let b = this.time_at_x(x + dx);
                     this.state.borrow_mut().selection = Some((a.min(b), a.max(b)));

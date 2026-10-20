@@ -1483,7 +1483,7 @@ impl Recorder {
         });
 
         let weak = Rc::downgrade(self);
-        self.player.connect_trim(move |start_us, until_us, duration_us| {
+        self.player.connect_trim(move |start_us, until_us, _duration_us| {
             let Some(r) = weak.upgrade() else { return };
             let Some(dir) = r.result_dir.borrow().clone() else { return };
             let dialog = adw::AlertDialog::new(
@@ -1494,7 +1494,7 @@ impl Recorder {
             dialog.set_prefer_wide_layout(true);
             dialog.set_content_width(640);
             let options = gtk::Label::builder()
-                .label(format!("Selection: {} to {}\n\nSave the selected audio, webcam video, and transcript as a new meeting. Sections before and after it are saved separately. Your original stays unchanged.\n\nFast copies media without re-encoding. Cuts may fall near the selection, especially for video, and timing can differ slightly between tracks.\n\nPrecise re-encodes at the selected times. It takes longer and uses more CPU. Neither option transcribes again.\n\nReview transcript text near the cuts. Entries are split by their start times, not individual words.", crate::chapters::clock(start_us / 1000), crate::chapters::clock(until_us / 1000)))
+                .label(format!("Selection: {} to {}\n\nSave the selected audio, webcam video, and existing transcript as one new meeting. Your original meeting stays unchanged.\n\nMedia is copied without re-encoding or retranscribing. Cuts follow media packet boundaries. Review transcript text near the cuts: entries are split by their start times, not individual words.", crate::chapters::clock(start_us / 1000), crate::chapters::clock(until_us / 1000)))
                 .wrap(true)
                 .max_width_chars(72)
                 .xalign(0.0)
@@ -1503,32 +1503,19 @@ impl Recorder {
                 .build();
             dialog.set_extra_child(Some(&options));
             dialog.add_response("cancel", "Cancel");
-            dialog.add_response("fast", "Fast · copy media");
-            dialog.add_response("precise", "Precise · re-encode");
+            dialog.add_response("save", "Save selection");
             dialog.set_default_response(Some("cancel"));
             dialog.set_close_response("cancel");
             let this = r.clone();
             dialog.connect_response(None, move |_, response| {
-                if !matches!(response, "fast" | "precise") || this.state.get() != State::Done { return; }
-                let reencode = response == "precise";
+                if response != "save" || this.state.get() != State::Done { return; }
                 let this = this.clone();
                 let dir = dir.clone();
                 this.player.unload();
                 this.set_state(State::Stopping);
                 glib::spawn_future_local(async move {
                     match gio::spawn_blocking(move || {
-                        let mut created = Vec::new();
-                        let result = (|| {
-                            let selected = crate::trim::copy_range(&dir, start_us, until_us, "selected", reencode)?;
-                            created.push(selected.clone());
-                            if start_us > 0 { created.push(crate::trim::copy_range(&dir, 0, start_us, "before", reencode)?); }
-                            if until_us < duration_us { created.push(crate::trim::copy_range(&dir, until_us, duration_us, "after", reencode)?); }
-                            Ok::<_, String>(selected)
-                        })();
-                        if result.is_err() {
-                            for path in created { let _ = std::fs::remove_dir_all(path); }
-                        }
-                        result
+                        crate::trim::copy_range(&dir, start_us, until_us, "selected")
                     }).await {
                         Ok(Ok(out)) => {
                             this.set_state(State::Done);
